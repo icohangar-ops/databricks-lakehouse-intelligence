@@ -1,0 +1,11 @@
+company_id,name,ticker,country,commodity,grade_percent,market_cap_billions,annual_production_kt,employees,founded_year,esg_score
+BHP001,BHP Group,BHP,Australia,Iron Ore,58.2,148.5,262000,80000,1885,82
+RIO002,Rio Tinto,RIO,"UK/Australia",Iron Ore,62.1,112.3,271000,57000,1873,85
+GLE003,Glencore,GLEN,Switzerland,Copper,1.8,62.1,122000,135000,1974,58
+AAL004,Anglo American,AAL,UK,PGMs,4.2,42.7,32000,95000,1917,71
+VALE005,Vale,VALE,Brazil,Iron Ore,55.7,78.9,308000,62000,1942,67
+FM006,First Quantum Minerals,FM,Canada,Copper,0.45,12.8,760,20000,1996,74
+TECK007,Teck Resources,TECK,Canada,Copper,0.38,18.5,580,12500,1913,73
+ERA008,Eramet,ERA,France,Nickel,1.2,6.8,4200,13000,1880,69
+S32009,South32,S32,Australia,Aluminum,42.1,15.3,15000,18000,2015,77
+IVN010,Ivanhoe Mines,IVN,Canada,Copper,2.8,22.1,38,5500,1994,78
