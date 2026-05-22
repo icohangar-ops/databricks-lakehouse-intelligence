@@ -1,295 +1,227 @@
 # 🏔️ Databricks Lakehouse Intelligence Suite
 
-**Medallion Architecture + Unity Catalog + MLflow on Databricks Free Edition**
+**Medallion Architecture + Unity Catalog + MLflow on Databricks**
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Databricks-Free%20Edition-orange" alt="Databricks Edition">
+  <img src="assets/architecture_diagram.png" width="100%" alt="Architecture">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Databricks-Free%20Edition-orange" alt="Databricks">
   <img src="https://img.shields.io/badge/Architecture-Medallion-blue" alt="Medallion">
+  <img src="https://img.shields.io/badge/Delta_Tables-9-green" alt="Tables">
+  <img src="https://img.shields.io/badge/MLflow_Runs-8-blue" alt="MLflow">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/Python-3.11+-yellow" alt="Python">
 </p>
 
 ---
 
-## 📋 Overview
+## Overview
 
-The **Lakehouse Intelligence Suite** is a comprehensive mining & metals analytics platform built entirely on Databricks Community Edition (Free Tier). It demonstrates how to implement production-grade data engineering, ML experiment tracking, and SQL analytics without any paid infrastructure.
+The **Lakehouse Intelligence Suite** is a production-grade mining & metals analytics platform built entirely on Databricks Free Edition using Serverless compute. It implements the full **Medallion Architecture** (Bronze → Silver → Gold) with Unity Catalog governance, MLflow experiment tracking, and SQL analytics dashboards to produce actionable intelligence scores for mining companies.
 
-This project implements the **Medallion Architecture** (Bronze → Silver → Gold) using Unity Catalog for governance and MLflow for experiment tracking. It processes mining company data through quality stages to produce actionable intelligence scores.
+This project processes real mining company data — production volumes, all-in sustaining costs (AISC), and financial metrics — through quality-controlled pipeline stages to generate composite signal scores across five dimensions: Grade, Cost, Production, Growth, and ESG. The entire workspace is provisioned and managed programmatically via the Databricks REST API v2.0/2.1.
 
 ### Key Capabilities
 
-- **Medallion Architecture**: Bronze (raw) → Silver (cleaned) → Gold (aggregated) data pipeline
-- **Unity Catalog**: 11 managed schemas under `workspace` catalog
-- **MLflow Tracking**: Signal score experiment tracking with parameterized models
-- **SQL Analytics**: Dashboard-ready SQL queries for Lakeview dashboards
-- **Sample Data**: Realistic mining company operational & financial data
+- **Medallion Architecture**: Bronze (raw) → Silver (cleaned) → Gold (aggregated) with quality scores at each stage
+- **Unity Catalog Governance**: 5 managed schemas under the `workspace` catalog with role-based access controls
+- **9 Delta Tables**: 3 per medallion layer — companies, production records, financials → signal scores, cross-domain intelligence
+- **MLflow Experiment Tracking**: 8 logged runs across 4 weight configurations (baseline, cost_focused, growth_focused, esg_focused) with signal score metrics
+- **Serverless-Compatible Notebooks**: All 6 notebooks use scikit-learn instead of pyspark.ml for Spark Connect compatibility
+- **Databricks Jobs Workflow**: 5-task chain with dependency ordering, scheduled daily at 6 AM ET (paused, ready to activate)
+- **SQL Dashboard Queries**: Top signals, AISC benchmarks, signal distribution, and cross-domain analytics
 
 ---
 
-## 🏗️ Architecture
+## Databricks Workspace Deployment
+
+This project is fully wired into a live Databricks workspace at [REDACTED_DATABRICKS_WORKSPACE](https://REDACTED_DATABRICKS_WORKSPACE). Every component below was provisioned programmatically via the Databricks REST API.
+
+### Workspace Resources Provisioned
+
+| Resource Type | Count | Details |
+|---|---|---|
+| **Unity Catalog Schemas** | 5 | `lakehouse_bronze`, `lakehouse_silver`, `lakehouse_gold`, `lakehouse_ml`, `lakehouse_reporting` |
+| **Delta Tables** | 9 | 3 Bronze + 3 Silver + 3 Gold (managed, ACID-compliant) |
+| **Notebooks** | 6 | Uploaded to `/Shared/Lakehouse_Intelligence/notebooks/` in SOURCE format |
+| **MLflow Experiments** | 1 | `/Shared/Lakehouse_Intelligence/experiments/signal_score_v1` (8 runs logged) |
+| **MLflow Runs** | 8 | 4 weight configurations x 2 executions, all FINISHED with metrics |
+| **Databricks Job** | 1 | `Lakehouse Intelligence Pipeline` (ID: `120923989305539`, 5-task chain) |
+| **SQL Warehouse** | 1 | `Serverless Starter Warehouse` (2X-Small, auto-resume) |
+
+### Delta Tables Breakdown
+
+| Schema | Table | Description |
+|---|---|---|
+| `lakehouse_bronze` | `mining_companies` | 10 Tier 1/2 miners with commodity focus, country, tier |
+| `lakehouse_bronze` | `production_records` | 15 quarterly production records (volume kt, AISC USD/t) |
+| `lakehouse_bronze` | `financial_metrics` | 10 quarterly financials (revenue, EBITDA, D/E, ROE) |
+| `lakehouse_silver` | `mining_companies` | Deduplicated with quality_score (0.95) |
+| `lakehouse_silver` | `production_records` | Window-deduped with AISC bands and period labels |
+| `lakehouse_silver` | `financial_metrics` | Deduplicated with EBITDA margin and net margin |
+| `lakehouse_gold` | `mining_signal_scores` | Composite 0-100 scores across 5 dimensions with signal bands |
+| `lakehouse_gold` | `cross_domain_intelligence` | Signal scores joined with financial KPIs |
+| `lakehouse_gold` | `_test_write` | Diagnostic table (can be dropped) |
+
+### MLflow Experiment Results
+
+| Run Name | Weights (G/C/P/Gw/E) | Avg Signal | Max | Min |
+|---|---|---|---|---|
+| `baseline` | 0.20 / 0.25 / 0.20 / 0.20 / 0.15 | 65.0 | 85.0 | 45.0 |
+| `cost_focused` | 0.15 / 0.30 / 0.25 / 0.15 / 0.15 | 63.0 | 82.0 | 42.0 |
+| `growth_focused` | 0.25 / 0.15 / 0.15 / 0.25 / 0.20 | 67.0 | 88.0 | 44.0 |
+| `esg_focused` | 0.20 / 0.20 / 0.20 / 0.15 / 0.25 | 64.0 | 83.0 | 43.0 |
+
+### Databricks Job Configuration
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DATABRICKS WORKSPACE                          │
-│                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │   BRONZE      │    │   SILVER     │    │    GOLD      │       │
-│  │   (Raw)       │───▶│   (Cleaned)  │───▶│ (Aggregated) │       │
-│  │               │    │              │    │              │       │
-│  │ • Companies   │    │ • Deduped    │    │ • Signal     │       │
-│  │ • Production  │    │ • Validated  │    │   Scores     │       │
-│  │ • Financials  │    │ • Normalized │    │ • Rankings   │       │
-│  └──────────────┘    └──────────────┘    └──────┬───────┘       │
-│                                                   │               │
-│                                                   ▼               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │   MLFLOW     │    │   SQL DASH   │    │   LAKEVIEW   │       │
-│  │   TRACKING   │◀───│   QUERIES    │───▶│   DASHBOARDS │       │
-│  │              │    │              │    │              │       │
-│  │ • Params     │    │ • Top Signals│    │ • KPI Cards  │       │
-│  │ • Metrics    │    │ • Trends     │    │ • Charts     │       │
-│  │ • Models     │    │ • Filters    │    │ • Tables     │       │
-│  └──────────────┘    └──────────────┘    └──────────────┘       │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                    UNITY CATALOG                           │   │
-│  │  workspace.mining_bronze │ workspace.mining_silver │ ...  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+Job: Lakehouse Intelligence Pipeline (ID: 120923989305539)
+Schedule: 0 0 6 * * ? (Daily 6AM ET, PAUSED)
+Git Source: github.com/Cubiczan/databricks-lakehouse-intelligence (main)
+
+Tasks:
+  bronze_ingest (00) ──▶ silver_transform (01) ──▶ gold_aggregate (02)
+                                                      │
+                                                      ▼
+                          dashboard_queries (04) ◀── mlflow_experiments (03)
 ```
+
+### API Endpoints Used for Provisioning
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/2.1/unity-catalog/schemas` | Create managed schemas |
+| `POST /api/2.0/workspace/mkdirs` | Create workspace folders |
+| `POST /api/2.0/workspace/import` | Upload notebooks (SOURCE format) |
+| `POST /api/2.0/mlflow/experiments/create` | Create MLflow experiments |
+| `POST /api/2.1/jobs/create` | Create multi-task job workflows |
+| `POST /api/2.1/jobs/run-now` | Trigger pipeline execution |
+| `GET /api/2.1/jobs/runs/get` | Monitor run status and task results |
+| `POST /api/2.0/sql/statements` | Query tables via SQL Warehouse |
+
+---
+
+## Architecture
+
+<p align="center">
+  <img src="assets/workspace_screenshot.png" width="100%" alt="Workspace">
+</p>
 
 ### Medallion Layers
 
-| Layer | Schema | Purpose | Operations |
-|-------|--------|---------|------------|
-| **Bronze** | `workspace.mining_bronze` | Raw data ingestion | Append-only, no transforms |
-| **Silver** | `workspace.mining_silver` | Cleaned & validated | Dedup, type cast, null handling |
-| **Gold** | `workspace.mining_gold` | Business aggregates | Signal scores, rankings, KPIs |
+| Layer | Schema | Purpose | Key Operations |
+|---|---|---|---|
+| **Bronze** | `workspace.lakehouse_bronze` | Raw data ingestion | Append-only, `write.mode("overwrite").saveAsTable()`, ingestion timestamps |
+| **Silver** | `workspace.lakehouse_silver` | Cleaned & validated | Deduplication (window functions), AISC banding, margin calculations, quality scores |
+| **Gold** | `workspace.lakehouse_gold` | Business intelligence | 5-dimension signal scoring (Grade/Cost/Production/Growth/ESG), cross-domain joins |
 
----
+### Signal Score Methodology
 
-## ⚡ Databricks Features Used
+Composite scores (0-100) are computed as weighted sums across five dimensions:
 
-| Feature | Implementation | Status |
-|---------|---------------|--------|
-| **Unity Catalog** | 11 schemas under `workspace` catalog | ✅ Configured |
-| **Managed Delta Tables** | Bronze, Silver, Gold layers | ✅ Active |
-| **Medallion Architecture** | 3-tier data pipeline | ✅ Implemented |
-| **MLflow Tracking** | Signal score experiments | ✅ Configured |
-| **SQL Warehouses** | Dashboard queries | ✅ Available |
-| **Lakeview Dashboards** | KPI & analytics dashboards | ✅ Ready |
-| **Notebook Workflows** | Sequential pipeline execution | ✅ Linked |
-| **DBSQL** | Ad-hoc SQL analytics | ✅ Enabled |
-| **Job Scheduler** | Automated pipeline runs | ✅ Available |
+```
+Composite = Grade x 0.20 + Cost x 0.25 + Production x 0.20 + Growth x 0.20 + ESG x 0.15
 
----
-
-## 🛠️ Workspace Setup
-
-The Databricks workspace was configured via the **Workspace API**. Below are the key setup operations:
-
-### Unity Catalog Schemas
-
-```python
-# 11 schemas created under workspace catalog
-schemas = [
-    "mining_bronze",
-    "mining_silver",
-    "mining_gold",
-    "risk_bronze",
-    "risk_silver",
-    "risk_gold",
-    "ml_experiments",
-    "ml_models",
-    "dashboards",
-    "reporting",
-    "staging"
-]
-
-for schema in schemas:
-    requests.post(
-        f"{BASE}/api/2.1/unity-catalog/schemas",
-        headers=HEADERS,
-        json={
-            "name": schema,
-            "catalog_name": "workspace",
-            "comment": f"Schema for {schema.replace('_', ' ')}"
-        }
-    )
+Signal Bands:  ≥80 Strong Buy | ≥65 Buy | ≥50 Hold | ≥35 Sell | <35 Strong Sell
 ```
 
-### Notebook Uploads
-
-```python
-# Upload notebooks to /Shared/Lakehouse_Intelligence/
-for nb_name in notebooks:
-    requests.post(
-        f"{BASE}/api/2.0/workspace/import",
-        headers=HEADERS,
-        json={
-            "path": f"/Shared/Lakehouse_Intelligence/{nb_name}",
-            "content": base64_encoded_content,
-            "language": "PYTHON",
-            "format": "SOURCE",
-            "overwrite": True
-        }
-    )
-```
-
-### API Endpoints Used
-
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /api/2.1/unity-catalog/schemas` | Create managed schemas |
-| `POST /api/2.0/workspace/import` | Upload notebooks |
-| `GET /api/2.0/workspace/export` | Export notebooks |
-| `GET /api/2.0/workspace/list` | List workspace objects |
+| Dimension | Data Source | Scoring Logic |
+|---|---|---|
+| **Grade** | Silver production records | Based on AISC thresholds ($3K-$7K/tonne) |
+| **Cost** | Silver production records | Inverse of AISC — lower cost = higher score |
+| **Production** | Silver production records | Based on total production volume (>50Kt = 95) |
+| **Growth** | Silver financial metrics | Derived from EBITDA margin x 1.5 + ROE x 0.8 |
+| **ESG** | Silver financial metrics | Based on debt-to-equity ratio (<0.30 = 85) |
 
 ---
 
-## 📓 Notebook Guide
+## Notebook Guide
 
 | # | Notebook | Description | Key Operations |
-|---|----------|-------------|----------------|
-| 00 | `00_setup.py` | Environment setup & catalog configuration | Initialize Spark, verify Unity Catalog access |
-| 01 | `01_bronze_ingest.py` | Raw data ingestion into Bronze layer | Create 3 Delta tables: companies, production, financials |
-| 02 | `02_silver_transform.py` | Data cleaning & validation | Deduplication, type casting, null handling |
-| 03 | `03_gold_aggregate.py` | Business intelligence aggregation | Compute 5-dimension signal scores (0-100) |
-| 04 | `04_mlflow_experiments.py` | ML experiment tracking | Log signal score experiments with MLflow |
-| 05 | `05_dashboard_sql.py` | SQL analytics for dashboards | Top signals, trends, rankings queries |
+|---|---|---|---|
+| 00 | `00_setup.py` | Environment verification | Print schema layout and architecture overview |
+| 01 | `01_bronze_ingest.py` | Raw data ingestion | Create 3 Bronze Delta tables (companies, production, financials) |
+| 02 | `02_silver_transform.py` | Data cleaning & enrichment | Window dedup, AISC bands, margin calculation, quality scores |
+| 03 | `03_gold_aggregate.py` | Signal score computation | 5-dimension weighted scoring, cross-domain intelligence join |
+| 04 | `04_mlflow_experiments.py` | MLflow experiment tracking | 4 weight configurations with metric logging |
+| 05 | `05_dashboard_sql.py` | SQL analytics queries | Top signals, AISC benchmarks, distribution, cross-domain |
 
-### Notebook Workflow
+### Serverless Compatibility Notes
 
-```
-00_setup ──▶ 01_bronze_ingest ──▶ 02_silver_transform
-                                     │
-                                     ▼
-                        03_gold_aggregate ──▶ 04_mlflow_experiments
-                                     │
-                                     ▼
-                          05_dashboard_sql
-```
+All notebooks are designed for **Databricks Serverless compute** (Spark Connect):
+- Uses `df.write.mode("overwrite").saveAsTable()` instead of `writeTo().createOrReplace()` (Spark Connect compatibility)
+- Uses `scikit-learn` instead of `pyspark.ml` (VectorAssembler is not whitelisted on Serverless)
+- Sets `mlflow.set_tracking_uri("databricks")` and `mlflow.set_registry_uri("databricks-uc")` explicitly
+- Uses `.toPandas()` for ML operations to avoid Py4J restrictions
 
 ---
 
-## 📊 Sample Data
+## Sample Data
 
-### Mining Companies (10 records)
+### Mining Companies (10 Tier 1/2 operators)
 
-| Company | Ticker | Country | Commodity | Grade (%) | Market Cap ($B) |
-|---------|--------|---------|-----------|-----------|-----------------|
-| BHP Group | BHP | Australia | Iron Ore | 58.2 | 148.5 |
-| Rio Tinto | RIO | UK/Australia | Iron Ore | 62.1 | 112.3 |
-| Glencore | GLEN | Switzerland | Copper/Ni | 1.8 | 62.1 |
-| Anglo American | AAL | UK | PGMs/De Beers | 4.2 | 42.7 |
-| Vale | VALE | Brazil | Iron Ore | 55.7 | 78.9 |
-| First Quantum | FM | Canada | Copper | 0.45 | 12.8 |
-| Teck Resources | TECK | Canada | Cu/Zn | 0.38 | 18.5 |
-| Eramet | ERA | France | Ni/Mn | 1.2 | 6.8 |
-| South32 | S32 | Australia | Al/Mn | 42.1 | 15.3 |
-| Ivanhoe Mines | IVN | Canada | Cu/Pt/Pd | 2.8 | 22.1 |
-
-### Production Records (15 records)
-- Monthly production data across commodities
-- Volume (tonnes), grade recovery (%), cost per unit
-
-### Financial Metrics (10 records)
-- Quarterly financials: revenue, EBITDA, capex, free cash flow
-- Debt-to-equity, ROIC, dividend yield
+| Company | Ticker | Commodity Focus | Country | Tier |
+|---|---|---|---|---|
+| Freeport-McMoRan | FCX | Copper/Gold | USA | Tier 1 |
+| Glencore | GLEN.L | Cobalt/Nickel | Switzerland | Tier 1 |
+| BHP Group | BHP | Iron Ore/Nickel | Australia | Tier 1 |
+| Rio Tinto | RIO | Iron Ore/Lithium | UK | Tier 1 |
+| Vale SA | VALE | Iron Ore/Nickel | Brazil | Tier 1 |
+| Albemarle | ALB | Lithium | USA | Tier 1 |
+| Southern Copper | SCCO | Copper | USA | Tier 2 |
+| First Quantum | FQVLF | Copper/Gold | Canada | Tier 2 |
+| Teck Resources | TECK | Copper/Zinc | Canada | Tier 2 |
+| Antofagasta | ANTO.L | Copper | Chile | Tier 2 |
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Databricks Community Edition account (free)
-- Python 3.11+ with Databricks Connect (optional)
-
-### Step 1: Clone & Upload
+## Quick Start
 
 ```bash
 git clone https://github.com/Cubiczan/databricks-lakehouse-intelligence.git
 cd databricks-lakehouse-intelligence
 ```
 
-### Step 2: Upload to Databricks
+### Upload to Databricks
 
 ```bash
-# Install Databricks CLI
-pip install databricks-cli
-
-# Configure authentication
+pip install databricks-sdk
 databricks configure --token
 
-# Upload notebooks
 for nb in notebooks/*.py; do
-    databricks workspace import "$nb" "/Shared/Lakehouse_Intelligence/$(basename $nb)" --language PYTHON --format SOURCE
+  databricks workspace import "$nb" \
+    "/Shared/Lakehouse_Intelligence/$(basename ${nb%.py})" \
+    --language PYTHON --format SOURCE --overwrite
 done
 ```
 
-### Step 3: Run the Pipeline
+### Run the Pipeline
 
-1. Open notebook `00_setup.py` in Databricks
-2. Run sequentially: `00` → `01` → `02` → `03` → `04` → `05`
-3. Each notebook creates/updates Delta tables in Unity Catalog
-
-### Step 4: Create a Dashboard
-
-1. Navigate to **Dashboards** → **Create Dashboard**
-2. Use SQL queries from `05_dashboard_sql.py`
-3. Add KPI cards, bar charts, and trend lines
+1. Open notebook `00_setup.py` in your Databricks workspace
+2. Execute sequentially: `00` → `01` → `02` → `03` → `04` → `05`
+3. Or trigger the full job: `databricks jobs run-now --json '{"job_id": 120923989305539}'`
 
 ---
 
-## 🔧 Tech Stack
+## Tech Stack
 
 | Component | Technology |
-|-----------|-----------|
-| **Platform** | Databricks Community Edition |
-| **Compute** | Serverless / Shared clusters |
-| **Catalog** | Unity Catalog (workspace) |
-| **Storage** | Delta Lake (managed tables) |
-| **ML Tracking** | MLflow |
-| **Language** | Python / PySpark / SQL |
-| **Governance** | Unity Catalog schemas |
-| **Visualization** | Lakeview Dashboards |
-| **API** | Databricks REST API 2.0/2.1 |
-
-### Python Package (src/lakehouse/)
-
-```python
-# Signal Score Computation
-from src.lakehouse.signal_engine import SignalEngine
-
-engine = SignalEngine()
-score = engine.compute_signal(
-    grade_score=85,
-    cost_score=72,
-    production_score=90,
-    growth_score=65,
-    esg_score=78
-)
-# → Weighted signal score: 0-100
-```
-
-### Dependencies
-
-```toml
-[project]
-name = "databricks-lakehouse-intelligence"
-requires-python = ">=3.11"
-dependencies = [
-    "databricks-sdk",
-    "mlflow",
-    "pandas",
-    "pydantic>=2.0",
-]
-```
+|---|---|
+| **Platform** | Databricks Free Edition (Serverless compute) |
+| **Compute** | Spark Connect (Serverless) |
+| **Catalog** | Unity Catalog (`workspace` catalog, `databricks-uc` registry) |
+| **Storage** | Delta Lake (managed tables, ACID transactions) |
+| **ML Tracking** | MLflow (experiment tracking, metric logging) |
+| **ML Library** | scikit-learn (Serverless-compatible, no Py4J) |
+| **Language** | Python 3.11 / PySpark / SQL |
+| **API** | Databricks REST API v2.0 (workspace) + v2.1 (jobs, Unity Catalog, MLflow) |
+| **Visualization** | SQL analytics via Serverless SQL Warehouse |
+| **Orchestration** | Databricks Jobs (5-task dependency chain) |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 databricks-lakehouse-intelligence/
@@ -310,29 +242,31 @@ databricks-lakehouse-intelligence/
 │       ├── models.py
 │       ├── signal_engine.py
 │       └── sql_queries.py
-└── data/
-    ├── sample_mining_companies.csv
-    ├── sample_production.csv
-    └── sample_financials.csv
+├── data/
+│   ├── sample_mining_companies.csv
+│   ├── sample_production.csv
+│   └── sample_financials.csv
+└── assets/
+    ├── architecture_diagram.png
+    ├── workspace_screenshot.png
+    └── Lakehouse_Intelligence_Demo.mp4
 ```
 
 ---
 
-## 🌐 Workspace
+## Demo Video
 
-**Databricks Workspace**: [https://REDACTED_DATABRICKS_WORKSPACE](https://REDACTED_DATABRICKS_WORKSPACE)
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
+[Watch the 3-minute walkthrough](assets/Lakehouse_Intelligence_Demo.mp4) covering the full pipeline from Bronze ingestion through MLflow experiments to dashboard analytics.
 
 ---
 
-## 👤 Author
+## Author
 
 **Shyam Desigan**
 - Email: sam@cubiczan.com
 - GitHub: [Cubiczan](https://github.com/Cubiczan)
 - Specialization: Data Engineering, Mining Analytics, Cloud Architecture
+
+## License
+
+MIT License
