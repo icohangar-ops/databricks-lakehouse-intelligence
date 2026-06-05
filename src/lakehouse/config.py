@@ -28,9 +28,9 @@ class LakehouseConfig:
     gold_signals_table: str = "signal_scores"
     gold_rankings_table: str = "company_rankings"
 
-    # Workspace
-    workspace_url: str = "https://REDACTED_DATABRICKS_WORKSPACE"
-    workspace_id: str = "REDACTED_DATABRICKS_WORKSPACE_ID"
+    # Workspace — set via DATABRICKS_WORKSPACE_URL and DATABRICKS_WORKSPACE_ID env vars
+    workspace_url: str = ""
+    workspace_id: str = ""
 
     # Signal scoring weights
     grade_weight: float = 0.25
