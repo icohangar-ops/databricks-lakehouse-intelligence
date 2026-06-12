@@ -179,7 +179,7 @@ All notebooks are designed for **Databricks Serverless compute** (Spark Connect)
 ## Quick Start
 
 ```bash
-git clone https://github.com/Cubiczan/databricks-lakehouse-intelligence.git
+git clone https://github.com/icohangar-ops/databricks-lakehouse-intelligence.git
 cd databricks-lakehouse-intelligence
 ```
 
@@ -264,7 +264,7 @@ databricks-lakehouse-intelligence/
 
 **Shyam Desigan**
 - Email: sam@cubiczan.com
-- GitHub: [Cubiczan](https://github.com/Cubiczan)
+- GitHub: [Cubiczan](https://github.com/icohangar-ops)
 - Specialization: Data Engineering, Mining Analytics, Cloud Architecture
 
 ## License
