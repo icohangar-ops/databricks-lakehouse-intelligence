@@ -5,6 +5,7 @@ import logging
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
 from delta.tables import DeltaTable
+from cubiczan_resilience import resilient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("silver_transform")
@@ -13,6 +14,7 @@ CATALOG = "workspace"
 logger.info("Silver Layer - Transformations")
 
 
+@resilient(timeout=300, max_attempts=3)
 def upsert_delta(df, fqn: str, keys: list[str]) -> None:
     """Idempotent MERGE upsert with structured logging and error context.
 

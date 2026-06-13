@@ -7,6 +7,7 @@ import logging
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 from delta.tables import DeltaTable
+from cubiczan_resilience import resilient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("bronze_ingest")
@@ -15,6 +16,7 @@ CATALOG = "workspace"
 logger.info("Bronze Layer - Data Ingestion")
 
 
+@resilient(timeout=300, max_attempts=3)
 def upsert_delta(df, fqn: str, keys: list[str]) -> None:
     """Idempotent write: MERGE on natural keys instead of createOrReplace.
 
