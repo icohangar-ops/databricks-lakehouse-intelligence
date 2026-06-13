@@ -78,7 +78,7 @@ This project is fully wired into a live Databricks workspace at [REDACTED_DATABR
 ```
 Job: Lakehouse Intelligence Pipeline (ID: 120923989305539)
 Schedule: 0 0 6 * * ? (Daily 6AM ET, PAUSED)
-Git Source: github.com/Cubiczan/databricks-lakehouse-intelligence (main)
+Git Source: github.com/icohangar-ops/databricks-lakehouse-intelligence (main)
 
 Tasks:
   bronze_ingest (00) ──▶ silver_transform (01) ──▶ gold_aggregate (02)
