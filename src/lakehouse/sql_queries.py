@@ -3,6 +3,27 @@
 from .config import LakehouseConfig
 
 
+def _escape_sql_string_literal(value: str) -> str:
+    """Validate and escape a value destined for a single-quoted SQL string literal.
+
+    These helpers build raw SQL strings (not executed via a parameterized
+    cursor), so untrusted values cannot be passed as bind parameters here.
+    We therefore (1) reject values containing characters that have no place
+    in a company name and could be used to break out of the literal, and
+    (2) defensively double any single quotes that remain.
+    """
+    if not isinstance(value, str):
+        raise TypeError(f"Expected str, got {type(value).__name__}")
+    # Disallow control chars, NUL, semicolons, and SQL comment sequences that
+    # could be used to terminate the literal / statement and inject SQL.
+    if "\x00" in value or ";" in value or "--" in value or "/*" in value:
+        raise ValueError(f"Illegal characters in identifier value: {value!r}")
+    if any(ord(ch) < 0x20 for ch in value):
+        raise ValueError(f"Control characters not allowed in value: {value!r}")
+    # Escape single quotes per SQL standard so the value stays inside the literal.
+    return value.replace("'", "''")
+
+
 def get_top_signals_query(
     config: LakehouseConfig | None = None,
     limit: int = 10,
@@ -34,7 +55,11 @@ def get_signal_trend_query(
 ) -> str:
     """Signal score trend over time."""
     cfg = config or LakehouseConfig()
-    where_clause = f"WHERE company_name = '{company_name}'" if company_name else ""
+    if company_name:
+        safe_name = _escape_sql_string_literal(company_name)
+        where_clause = f"WHERE company_name = '{safe_name}'"
+    else:
+        where_clause = ""
     return f"""
 SELECT
     period,

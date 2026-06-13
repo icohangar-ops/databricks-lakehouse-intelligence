@@ -1,8 +1,44 @@
 # Databricks notebook source
 # Gold Layer - Signal Scores (0-100) across 5 dimensions
+import logging
+
 from pyspark.sql.functions import *
+from delta.tables import DeltaTable
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("gold_aggregate")
+
 CATALOG = "workspace"
-print("Gold Layer - Signal Score Aggregation")
+logger.info("Gold Layer - Signal Score Aggregation")
+
+
+def upsert_delta(df, fqn: str, keys: list[str]) -> None:
+    """Idempotent MERGE upsert with structured logging and error context.
+
+    Replaces mode("overwrite").saveAsTable (which discards all prior rows on
+    every run) so the gold layer survives re-runs and transient failures
+    surface with context rather than silently aborting the scheduled job.
+    """
+    try:
+        if not spark.catalog.tableExists(fqn):
+            df.write.mode("overwrite").saveAsTable(fqn)
+            logger.info("%s: created with %d rows", fqn, df.count())
+            return
+
+        target = DeltaTable.forName(spark, fqn)
+        cond = " AND ".join(f"t.{k} = s.{k}" for k in keys)
+        (
+            target.alias("t")
+            .merge(df.alias("s"), cond)
+            .whenMatchedUpdateAll()
+            .whenNotMatchedInsertAll()
+            .execute()
+        )
+        logger.info("%s: merged %d rows", fqn, df.count())
+    except Exception:
+        logger.exception("Failed writing %s", fqn)
+        raise
+
 
 df_c = spark.read.table(f"{CATALOG}.lakehouse_silver.mining_companies")
 df_p = spark.read.table(f"{CATALOG}.lakehouse_silver.production_records")
@@ -39,12 +75,11 @@ df_s = df_s.withColumn("composite_score", round(col("grade_score") * 0.20 + col(
 df_s = df_s.withColumn("signal_band", when(col("composite_score") >= 80, "Strong Buy").when(col("composite_score") >= 65, "Buy").when(col("composite_score") >= 50, "Hold").when(col("composite_score") >= 35, "Sell").otherwise("Strong Sell"))
 df_s = df_s.withColumn("gold_ts", current_timestamp())
 
-df_s.write.mode("overwrite").saveAsTable(f"{CATALOG}.lakehouse_gold.mining_signal_scores")
-print("mining_signal_scores created")
+upsert_delta(df_s, f"{CATALOG}.lakehouse_gold.mining_signal_scores", ["company_id"])
 
 # Cross-domain intelligence
 df_cross = df_s.join(df_f.select("company_id", "revenue_m_usd", "ebitda_margin", "net_margin", "debt_to_equity"), "company_id", "left")
 df_cross = df_cross.withColumn("gold_ts", current_timestamp())
-df_cross.write.mode("overwrite").saveAsTable(f"{CATALOG}.lakehouse_gold.cross_domain_intelligence")
-print("cross_domain_intelligence created")
-print("Gold layer complete")
+upsert_delta(df_cross, f"{CATALOG}.lakehouse_gold.cross_domain_intelligence", ["company_id"])
+
+logger.info("Gold layer complete")
